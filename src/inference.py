@@ -3,9 +3,9 @@ import json
 import os, sys
 sys.path.append(os.getcwd())
 from transformers import LlamaForCausalLM, LlamaTokenizer, AutoTokenizer, AutoModelForCausalLM, AutoConfig
-from src.models.tokenization_baichuan import BaiChuanTokenizer
-from src.models.modeling_baichuan import BaiChuanForCausalLM
-from src.models.configuration_baichuan import BaiChuanConfig
+from src.models.baichuan.tokenization_baichuan import BaiChuanTokenizer
+from src.models.baichuan.modeling_baichuan import BaiChuanForCausalLM
+from src.models.baichuan.configuration_baichuan import BaiChuanConfig
 from peft import PeftModel
 import argparse
 from tqdm import tqdm

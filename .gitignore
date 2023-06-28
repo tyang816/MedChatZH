@@ -165,3 +165,4 @@ logs/
 hf_cache_dir/
 flagged/
 *.log
+*.ipynb

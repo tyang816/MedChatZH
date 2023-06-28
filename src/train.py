@@ -13,10 +13,11 @@ import logging
 import json
 import torch
 from transformers.utils import add_start_docstrings
-from src.models.tokenization_baichuan import BaiChuanTokenizer
-from src.models.modeling_baichuan import BaiChuanForCausalLM
-from src.models.configuration_baichuan import BaiChuanConfig
+from src.models.baichuan.tokenization_baichuan import BaiChuanTokenizer
+from src.models.baichuan.modeling_baichuan import BaiChuanForCausalLM
+from src.models.baichuan.configuration_baichuan import BaiChuanConfig
 import transformers
+from transformers import LlamaForCausalLM, LlamaTokenizer
 from datasets import load_dataset
 import copy
 
@@ -88,9 +89,12 @@ class ModelArguments:
             "choices": ["auto", "bfloat16", "float16", "float32"],
         },
     )
-    llama: bool = field(
-        default=False,
-        metadata={"help": "Llama model"}
+    model_name: Optional[str] = field(
+        default=None,
+        metadata={
+            "help": "The model architecture to be trained or fine-tuned.",
+            "choices": ["baichuan", "llama"],
+        },
     )
 
 
@@ -129,10 +133,6 @@ class TrainingArguments(TrainingArguments):
     use_lora: bool = field(
         default=False,
         metadata={"help": "Whether to use LoRA."}
-    )
-    use_int8_training: bool = field(
-        default=False,
-        metadata={"help": "Whether to use int8 training."}
     )
     lora_config: Optional[str] = field(
         default=None,
@@ -206,22 +206,6 @@ def main():
     )
     logger.info(f"Training/evaluation parameters {training_args}")
 
-    # Detecting last checkpoint.
-    # last_checkpoint = None
-    # if os.path.isdir(training_args.output_dir) and training_args.do_train and not training_args.overwrite_output_dir:
-    #     last_checkpoint = get_last_checkpoint(training_args.output_dir)
-    #     if last_checkpoint is None and len(os.listdir(training_args.output_dir)) > 0:
-    #         raise ValueError(
-    #             f"Output directory ({training_args.output_dir}) already exists and is not empty. "
-    #             "Use --overwrite_output_dir to overcome."
-    #         )
-    #     elif last_checkpoint is not None and training_args.resume_from_checkpoint is None:
-    #         logger.info(
-    #             f"Checkpoint detected, resuming training at {last_checkpoint}. To avoid this behavior, change "
-    #             "the `--output_dir` or add `--overwrite_output_dir` to train from scratch."
-    #         )
-
-
     # Set seed before initializing model.
     set_seed(training_args.seed)
 
@@ -231,24 +215,25 @@ def main():
         if model_args.torch_dtype in ["auto", None]
         else getattr(torch, model_args.torch_dtype)
     )
-    # int8 is not compatible with DeepSpeed (require not to pass device_map)
-    if training_args.use_int8_training:
-        print_rank_0("int8 is not compatible with DeepSpeed. ", log_file, global_rank)
-        device_map = {"": int(os.environ.get("LOCAL_RANK") or 0)} if world_size != 1 else "auto"
-        # device_map = "auto"
-        model = BaiChuanForCausalLM.from_pretrained(
-            model_args.model_name_or_path,
-            load_in_8bit=True,      # xxx: int8 load in
-            device_map=device_map,  # xxx: int8 requires passing device_map
-            torch_dtype=torch_dtype,
-        )
-    else:
-        model = BaiChuanForCausalLM.from_pretrained(
-            model_args.model_name_or_path,
-            torch_dtype=torch_dtype,
-        )
 
-    tokenizer = BaiChuanTokenizer.from_pretrained(model_args.model_name_or_path)
+    if model_args.model_name == "baichuan":
+        model = BaiChuanForCausalLM.from_pretrained(
+            model_args.model_name_or_path,
+            torch_dtype=torch_dtype,
+        )
+        tokenizer = BaiChuanTokenizer.from_pretrained(model_args.model_name_or_path)
+    elif model_args.model_name == "llama":
+        model = LlamaForCausalLM.from_pretrained(
+            model_args.model_name_or_path,
+            torch_dtype=torch_dtype,
+        )
+        tokenizer = LlamaTokenizer.from_pretrained(model_args.model_name_or_path)
+    else:
+        model = AutoModelForCausalLM.from_pretrained(
+            model_args.model_name_or_path,
+            torch_dtype=torch_dtype,
+        )
+        tokenizer = AutoTokenizer.from_pretrained(model_args.model_name_or_path)
 
     tokenizer.pad_token_id = 0
     tokenizer.padding_side = "left"  # Allow batched inference
@@ -262,9 +247,6 @@ def main():
         print_rank_0("Loading lora config from {}".format(training_args.lora_config), log_file, global_rank)
         lora_config = json.load(open(training_args.lora_config))
         print_rank_0("Lora config: {}".format(lora_config), log_file, global_rank)
-        if training_args.use_int8_training:
-            print_rank_0("training_args.use_int8_training!!! (int8 is not compatible with DeepSpeed)", log_file, global_rank)
-            model = prepare_model_for_int8_training(model)
         config = LoraConfig(
             r=lora_config['lora_r'],
             lora_alpha=lora_config['lora_alpha'],
@@ -369,7 +351,8 @@ def main():
 
     batch_size = training_args.per_device_train_batch_size * training_args.world_size * training_args.gradient_accumulation_steps
     t_total = math.ceil(training_nums/batch_size) * training_args.num_train_epochs
-    training_args.eval_steps = max(t_total // 10, 5)
+    training_args.eval_steps = max(t_total // 3, 5)
+    # training_args.eval_steps = t_total
     training_args.save_steps = training_args.eval_steps
     training_args.warmup_steps = int(t_total*training_args.warmup_ratio) if training_args.warmup_ratio>0.0 else training_args.warmup_steps
     print_rank_0("num_gpus = {}, training_nums = {}, t_total = {}, warmup_steps = {}, eval_steps = {}, save_steps = {}".format(num_gpus, training_nums, t_total, training_args.warmup_steps, training_args.eval_steps, training_args.save_steps), log_file, global_rank)
@@ -417,7 +400,7 @@ def main():
             )
         ).__get__(model, type(model))
 
-    trainer.train(resume_from_checkpoint=None)
+    trainer.train(resume_from_checkpoint=training_args.resume_from_checkpoint)
     if training_args.use_lora:
         model.save_pretrained(training_args.output_dir)#Save adapter_model.bin and adapter_config.json
 

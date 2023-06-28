@@ -18,22 +18,37 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 from .configuration_baichuan import BaiChuanConfig
+
+import copy
+import warnings
+import math
+from typing import *
+import re
+import torch
+import torch.utils.checkpoint
+from torch import nn
+from torch.nn import BCEWithLogitsLoss, CrossEntropyLoss, MSELoss
 from transformers import PreTrainedModel, add_start_docstrings
 from transformers.activations import ACT2FN
 from transformers.modeling_outputs import BaseModelOutputWithPast, CausalLMOutputWithPast, \
     SequenceClassifierOutputWithPast
 from transformers.utils import logging, add_start_docstrings_to_model_forward, replace_return_docstrings
-
-import math
-from typing import List, Optional, Tuple, Union
-
-import torch
-import torch.utils.checkpoint
-from torch import nn
-from torch.nn import BCEWithLogitsLoss, CrossEntropyLoss, MSELoss
-
+from transformers.generation.logits_process import LogitsProcessor
+from transformers.generation.utils import LogitsProcessorList, StoppingCriteriaList, GenerationConfig, ModelOutput
 
 logger = logging.get_logger(__name__)
+
+# copied from https://huggingface.co/THUDM/chatglm-6b-int4/blob/main/modeling_chatglm.py
+class InvalidScoreLogitsProcessor(LogitsProcessor):
+    def __call__(self, input_ids: torch.LongTensor, scores: torch.FloatTensor) -> torch.FloatTensor:
+        if torch.isnan(scores).any() or torch.isinf(scores).any():
+            scores.zero_()
+            scores[..., 5] = 5e4
+        return scores
+
+def generate_prompt(input_text):
+    return "Human: \n" + input_text + "\n\nAssistant:\n"
+
 
 # Copied from transformers.models.bart.modeling_bart._make_causal_mask
 def _make_causal_mask(
@@ -676,3 +691,144 @@ class BaiChuanForCausalLM(PreTrainedModel):
         for layer_past in past_key_values:
             reordered_past += (tuple(past_state.index_select(0, beam_idx) for past_state in layer_past),)
         return reordered_past
+
+    def process_response(self, response):
+        response = response.strip()
+        response = response.replace("[[训练时间]]", "2023年")
+        punkts = [
+            [",", "，"],
+            ["!", "！"],
+            [":", "："],
+            [";", "；"],
+            ["\?", "？"],
+        ]
+        for item in punkts:
+            response = re.sub(r"([\u4e00-\u9fff])%s" % item[0], r"\1%s" % item[1], response)
+            response = re.sub(r"%s([\u4e00-\u9fff])" % item[0], r"%s\1" % item[1], response)
+        return response
+    
+    # copied from https://huggingface.co/THUDM/chatglm-6b-int4/blob/main/modeling_chatglm.py
+    @torch.no_grad()
+    def stream_chat(self, tokenizer, query: str, history: List = None, 
+                    gen_kwargs: dict = None, logits_processor=None):
+        if history is None:
+            history = []
+        if logits_processor is None:
+            logits_processor = LogitsProcessorList()
+        logits_processor.append(InvalidScoreLogitsProcessor())
+
+        if not history:
+            prompt = generate_prompt(query)
+        else:
+            history.append(generate_prompt(query))
+            prompt = "".join(history)
+            
+        inputs = tokenizer(prompt, return_tensors="pt")
+        inputs = inputs.to(self.model.device)
+        for outputs in self.stream_generate(**inputs, **gen_kwargs):
+            outputs = outputs.tolist()[0][len(inputs["input_ids"][0]):]
+            response = tokenizer.decode(outputs, skip_special_tokens=True).split("Assistant:")[-1].strip()
+            response = self.process_response(response)
+            yield response
+
+    @torch.no_grad()
+    def stream_generate(
+        self,
+        input_ids,
+        generation_config: Optional[GenerationConfig] = None,
+        logits_processor: Optional[LogitsProcessorList] = None,
+        stopping_criteria: Optional[StoppingCriteriaList] = None,
+        prefix_allowed_tokens_fn: Optional[Callable[[int, torch.Tensor], List[int]]] = None,
+        **kwargs,
+    ):
+        batch_size, input_ids_seq_length = input_ids.shape[0], input_ids.shape[-1]
+
+        if generation_config is None:
+            generation_config = self.generation_config
+        generation_config = copy.deepcopy(generation_config)
+        model_kwargs = generation_config.update(**kwargs)
+        bos_token_id, eos_token_id = generation_config.bos_token_id, generation_config.eos_token_id
+
+        if isinstance(eos_token_id, int):
+            eos_token_id = [eos_token_id]
+
+        has_default_max_length = kwargs.get("max_length") is None and generation_config.max_length is not None
+        if has_default_max_length and generation_config.max_new_tokens is None:
+            warnings.warn(
+                f"Using `max_length`'s default ({generation_config.max_length}) to control the generation length. "
+                "This behaviour is deprecated and will be removed from the config in v5 of Transformers -- we"
+                " recommend using `max_new_tokens` to control the maximum length of the generation.",
+                UserWarning,
+            )
+        elif generation_config.max_new_tokens is not None:
+            generation_config.max_length = generation_config.max_new_tokens + input_ids_seq_length
+            if not has_default_max_length:
+                logger.warn(
+                    f"Both `max_new_tokens` (={generation_config.max_new_tokens}) and `max_length`(="
+                    f"{generation_config.max_length}) seem to have been set. `max_new_tokens` will take precedence. "
+                    "Please refer to the documentation for more information. "
+                    "(https://huggingface.co/docs/transformers/main/en/main_classes/text_generation)",
+                    UserWarning,
+                )
+
+        if input_ids_seq_length >= generation_config.max_length:
+            input_ids_string = "decoder_input_ids" if self.config.is_encoder_decoder else "input_ids"
+            logger.warning(
+                f"Input length of {input_ids_string} is {input_ids_seq_length}, but `max_length` is set to"
+                f" {generation_config.max_length}. This can lead to unexpected behavior. You should consider"
+                " increasing `max_new_tokens`."
+            )
+
+        # 2. Set generation parameters if not already defined
+        logits_processor = logits_processor if logits_processor is not None else LogitsProcessorList()
+        stopping_criteria = stopping_criteria if stopping_criteria is not None else StoppingCriteriaList()
+
+        logits_processor = self._get_logits_processor(
+            generation_config=generation_config,
+            input_ids_seq_length=input_ids_seq_length,
+            encoder_input_ids=input_ids,
+            prefix_allowed_tokens_fn=prefix_allowed_tokens_fn,
+            logits_processor=logits_processor,
+        )
+
+        stopping_criteria = self._get_stopping_criteria(
+            generation_config=generation_config, stopping_criteria=stopping_criteria
+        )
+        logits_warper = self._get_logits_warper(generation_config)
+
+        unfinished_sequences = input_ids.new(input_ids.shape[0]).fill_(1)
+        scores = None
+        while True:
+            model_inputs = self.prepare_inputs_for_generation(input_ids, **model_kwargs)
+            # forward pass to get next token
+            outputs = self(
+                **model_inputs,
+                return_dict=True,
+                output_attentions=False,
+                output_hidden_states=False,
+            )
+
+            next_token_logits = outputs.logits[:, -1, :]
+
+            # pre-process distribution
+            next_token_scores = logits_processor(input_ids, next_token_logits)
+            next_token_scores = logits_warper(input_ids, next_token_scores)
+
+            # sample
+            probs = nn.functional.softmax(next_token_scores, dim=-1)
+            if generation_config.do_sample:
+                next_tokens = torch.multinomial(probs, num_samples=1).squeeze(1)
+            else:
+                next_tokens = torch.argmax(probs, dim=-1)
+
+            # update generated ids, model inputs, and length for next step
+            input_ids = torch.cat([input_ids, next_tokens[:, None]], dim=-1)
+            model_kwargs = self._update_model_kwargs_for_generation(
+                outputs, model_kwargs, is_encoder_decoder=self.config.is_encoder_decoder
+            )
+            unfinished_sequences = unfinished_sequences.mul((sum(next_tokens != i for i in eos_token_id)).long())
+
+            # stop when each sentence is finished, or if we exceed the maximum length
+            if unfinished_sequences.max() == 0 or stopping_criteria(input_ids, scores):
+                break
+            yield input_ids
