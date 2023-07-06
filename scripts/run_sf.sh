@@ -13,7 +13,7 @@ cutoff_len=1024
 
 
 # #FT
-CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6,7 torchrun --nproc_per_node 8 run_sf.py \
+CUDA_VISIBLE_DEVICES=1,2,3,4,5,6,7 torchrun --nproc_per_node 7 run_sf.py \
     --model_name_or_path ${model_name_or_path} \
     --model_name llama \
     --deepspeed src/configs/deepspeed_config.json \
@@ -21,7 +21,7 @@ CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6,7 torchrun --nproc_per_node 8 run_sf.py \
     --validation_file ${validation_file} \
     --per_device_train_batch_size 4 \
     --per_device_eval_batch_size 4 \
-    --gradient_accumulation_steps 20 \
+    --gradient_accumulation_steps 10 \
     --num_train_epochs 2 \
     --model_max_length ${cutoff_len} \
     --save_strategy "steps" \

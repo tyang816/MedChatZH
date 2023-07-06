@@ -166,3 +166,7 @@ hf_cache_dir/
 flagged/
 *.log
 *.ipynb
+*.csv
+*.json
+data/
+gen_data/

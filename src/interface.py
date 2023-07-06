@@ -1,8 +1,12 @@
 import torch
 import json
-from peft import PeftModel
+import argparse
+import mdtex2html
+import gradio as gr
 import os, sys
 sys.path.append(os.getcwd())
+from peft import PeftModel
+
 from src.models.baichuan.tokenization_baichuan import BaiChuanTokenizer
 from src.models.baichuan.modeling_baichuan import BaiChuanForCausalLM
 from src.models.baichuan.configuration_baichuan import BaiChuanConfig
@@ -12,12 +16,7 @@ from src.models.chatglm.configuration_chatglm import ChatGLMConfig
 from transformers import GenerationConfig
 from transformers import LlamaForCausalLM, LlamaTokenizer, LlamaConfig
 from transformers import AutoTokenizer, AutoModelForCausalLM, AutoConfig
-import mdtex2html
 
-import argparse
-from tqdm import tqdm
-import gradio as gr
-import json, os
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--model_name_or_path', type=str, required=True)
@@ -99,7 +98,7 @@ def evaluate(
     temperature=0.1,
     top_p=0.75,
     top_k=40,
-    num_beams=4,
+    num_beams=1,
     max_new_tokens=512,
     min_new_tokens=5,
     repetition_penalty=1.2,
@@ -113,9 +112,6 @@ def evaluate(
         top_p=top_p,
         top_k=top_k,
         num_beams=num_beams,
-        bos_token_id=1,
-        eos_token_id=2,
-        pad_token_id=0,
         max_new_tokens=max_new_tokens, # max_length=max_new_tokens+input_sequence
         min_new_tokens=min_new_tokens, # min_length=min_new_tokens+input_sequence
         repetition_penalty=repetition_penalty,
