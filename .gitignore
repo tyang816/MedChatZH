@@ -170,3 +170,4 @@ flagged/
 *.json
 data/
 gen_data/
+*jsonl

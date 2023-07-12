@@ -100,5 +100,5 @@ if __name__ == '__main__':
             idx += 1
     
     data = pd.DataFrame(data)
-    data.to_csv(f"{args.output_dir}/{args.model_name}_{args.precision}_6.csv", index=False)
+    data.to_csv(f"{args.output_dir}/{args.model_name}_{args.precision}_12.csv", index=False)
     

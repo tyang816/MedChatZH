@@ -356,7 +356,8 @@ def main():
     batch_size = training_args.per_device_train_batch_size * training_args.world_size * training_args.gradient_accumulation_steps
     t_total = math.ceil(training_nums/batch_size) * training_args.num_train_epochs
     training_args.eval_steps = training_args.eval_steps
-    training_args.save_steps = max(t_total // 4, 5)
+    # training_args.save_steps = t_total
+    training_args.save_steps = max(t_total // 2, 5)
     training_args.warmup_steps = int(t_total*training_args.warmup_ratio) if training_args.warmup_ratio>0.0 else training_args.warmup_steps
     print_rank_0("num_gpus = {}, training_nums = {}, t_total = {}, warmup_steps = {}, eval_steps = {}, save_steps = {}".format(num_gpus, training_nums, t_total, training_args.warmup_steps, training_args.eval_steps, training_args.save_steps), log_file, global_rank)
     print_rank_0("val data nums = {}, training_nums = {}, batch_size = {}".format(len(val_data), training_nums, batch_size), log_file, global_rank)
