@@ -90,7 +90,7 @@ def reset_state():
 
 
 def generate_prompt(input_text):
-    return "Human: \n" + input_text + "\n\nAssistant:\n"
+    return f"Human: \n' + {input_text} + '\n\nAssistant: \n"
 
 
 def evaluate(
@@ -179,7 +179,7 @@ if __name__ == '__main__':
             fn=evaluate,
             inputs=[
                 gr.components.Textbox(
-                    lines=2, label="Input", placeholder="Welcome to the zhaoyan model"
+                    lines=2, label="Input", placeholder="Welcome to the language model"
                 ),
                 gr.components.Slider(minimum=0, maximum=1, value=0.1, label="Temperature"),
                 gr.components.Slider(minimum=0, maximum=1, value=0.75, label="Top p"),
@@ -201,7 +201,7 @@ if __name__ == '__main__':
                     label="Output",
                 )
             ],
-            title="兆言大模型",
+            title="model",
         ).queue().launch(share=True, server_name="0.0.0.0", server_port=args.port)
     else:
         with gr.Blocks() as demo:

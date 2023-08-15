@@ -18,7 +18,7 @@ from src.models.chatglm.modeling_chatglm import ChatGLMForConditionalGeneration
 from src.models.chatglm.configuration_chatglm import ChatGLMConfig
 from transformers import GenerationConfig
 from transformers import LlamaForCausalLM, LlamaTokenizer, LlamaConfig
-from transformers import AutoTokenizer, AutoModelForCausalLM, AutoConfig
+from transformers import AutoTokenizer, AutoModelForCausalLM, AutoConfig, AutoModel
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--model_name_or_path', type=str, required=True)
@@ -99,7 +99,7 @@ if __name__ == '__main__':
     final_result = {'label': [], 'question': [], 'predict': []}
     
     if 'chatglm' in args.model_name:
-        for label, question in tqdm(zip(data['train']['label'], data['train']['question'])):
+        for label, question in tqdm(zip(data['train']['question_id'], data['train']['question'])):
             if label in final_result['label']:
                 continue
             print(question)
@@ -131,7 +131,7 @@ if __name__ == '__main__':
         test_data_loader = DataLoader(test_data, batch_size=1, collate_fn=collate_fn)
         
         for idx, batch in tqdm(enumerate(test_data_loader)):
-            label = data["train"]["label"][idx]
+            label = data["train"]["question_id"][idx]
             question = data["train"]["question"][idx]
             if label in final_result['label']:
                 continue
@@ -167,7 +167,7 @@ if __name__ == '__main__':
         test_data_loader = DataLoader(test_data, batch_size=1, collate_fn=collate_fn)
         
         for idx, batch in tqdm(enumerate(test_data_loader)):
-            label = data["train"]["label"][idx]
+            label = data["train"]["question_id"][idx]
             question = data["train"]["question"][idx]
             if label in final_result['label']:
                 continue
