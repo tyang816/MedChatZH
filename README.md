@@ -4,6 +4,16 @@
 
 基于Baichuan-7B在中医书籍数据和医疗指令对话数据上训练，使其具备较强的中文医疗对话能力，**能够理解中医问题**。
 
+## 模型权重和指令精调数据
+
+模型权重（7B）：https://huggingface.co/tyang816/MedChatZH
+
+从7M数据中清洗出的高质量医学指令对话数据（764k）：https://huggingface.co/datasets/tyang816/MedChatZH
+
+## 推理与部署
+
+请下载模型到您的目录，并调用 `scripts/inference.sh` 做推理，`scripts/interface.sh`做web部署
+
 ## 🚀 结果
 
 | 问题                                                         | 回答                                                         |
