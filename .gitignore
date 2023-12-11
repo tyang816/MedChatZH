@@ -171,3 +171,4 @@ flagged/
 data/
 gen_data/
 *jsonl
+model/

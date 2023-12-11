@@ -127,7 +127,7 @@ def evaluate(
         output = generation_output.sequences[0]
         output = tokenizer.decode(output, skip_special_tokens=True).split("Assistant:")[1].strip()
         print(output)
-        yield output
+        return output
 
 
 if __name__ == '__main__':
@@ -145,8 +145,9 @@ if __name__ == '__main__':
     if args.model_name == 'baichuan':
         tokenizer = BaiChuanTokenizer.from_pretrained(args.model_name_or_path)
         model_config = BaiChuanConfig.from_pretrained(args.model_name_or_path)
-        model = BaiChuanForCausalLM.from_pretrained(
-            args.model_name_or_path, torch_dtype=load_type, config=model_config
+        print("load model config successfully")
+        model = AutoModelForCausalLM.from_pretrained(
+            args.model_name_or_path, device_map="auto", torch_dtype=load_type, config=model_config, trust_remote_code=True
         )
     elif args.model_name == 'llama':        
         tokenizer = LlamaTokenizer.from_pretrained(args.model_name_or_path)
@@ -195,14 +196,9 @@ if __name__ == '__main__':
                     minimum=1.0, maximum=2.0, step=0.1, value=1.2, label="Repetition Penalty"
                 ),
             ],
-            outputs=[
-                gr.inputs.Textbox(
-                    lines=25,
-                    label="Output",
-                )
-            ],
+            outputs="text",
             title="model",
-        ).queue().launch(share=True, server_name="0.0.0.0", server_port=args.port)
+        ).launch(share=True, server_name="0.0.0.0", server_port=args.port)
     else:
         with gr.Blocks() as demo:
             gr.HTML("""<h1 align="center">ChatGLM</h1>""")
