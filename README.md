@@ -8,7 +8,7 @@
 
 模型权重（7B）：https://huggingface.co/tyang816/MedChatZH
 
-从7M数据中清洗出的高质量医学指令对话数据（764k）：https://huggingface.co/datasets/tyang816/MedChatZH
+从7M数据中清洗出的高质量医学指令对话数据（764k）以及高质量医学/通用混合对话数据（2M）：https://huggingface.co/datasets/tyang816/MedChatZH
 
 ## 推理与部署
 
@@ -28,11 +28,13 @@
 如果您使用了我们的模型、代码或数据，请引用：
 
 ```
-@article{MedChatZH2023,
-  title={MedChatZH: a Better Medical Adviser Learns from Better Instructions},
-  author={Yang Tan, Mingchen Li, Zijie Huang, Huiun Yu, Guisheng Fan},
-  journal={arXiv preprint arXiv:2309.01114},
-  year={2023}
+@article{tan2024medchatzh,
+  title={MedChatZH: A tuning LLM for traditional Chinese medicine consultations},
+  author={Tan, Yang and Zhang, Zhixing and Li, Mingchen and Pan, Fei and Duan, Hao and Huang, Zijie and Deng, Hua and Yu, Zhuohang and Yang, Chen and Shen, Guoyang and others},
+  journal={Computers in Biology and Medicine},
+  pages={108290},
+  year={2024},
+  publisher={Elsevier}
 }
 ```
 
