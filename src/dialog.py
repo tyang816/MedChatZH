@@ -1,7 +1,6 @@
 import torch
 import os, sys
 import argparse
-import time
 sys.path.append(os.getcwd())
 from src.models.baichuan.tokenization_baichuan import BaiChuanTokenizer
 from src.models.baichuan.modeling_baichuan import BaiChuanForCausalLM
@@ -48,28 +47,16 @@ if __name__ == '__main__':
     model.eval()
 
     history = []
-    print("ZhaoYan: 你好，我是兆言。")
     while True:
-        print('-'*50)
+        print('-'*50+'\n')
         inputs = input("User: ")
         start_pos, end_pos = 0, 0
         final_res = ""
         for res in model.stream_chat(tokenizer=tokenizer, query=inputs, history=history, gen_kwargs=generation_config):
             end_pos = len(res)
-            print(res[start_pos: end_pos], end="")
+            print("MedChatZH："+res[start_pos: end_pos], end="")
             start_pos = end_pos
             final_res = res
         history.append(f"Human: \n{inputs}\n\nAssistant: {final_res}\n")
-        # limit history to 3
         if len(history) > 3:
             history = history[-3:]
-        # prompt = ''.join(history)
-        # inputs = tokenizer(prompt, return_tensors="pt").to(device)
-        # input_ids = tokenizer(prompt, return_tensors="pt").input_ids.to(device)
-        # generation_output = model.generate(
-        #     input_ids=input_ids, **generation_config
-        # )
-        # output = generation_output.sequences[0]
-        
-        # response = tokenizer.decode(output, skip_special_tokens=True).split("Assistant:")[-1].strip()
-        # history[-1] += f"{response}\n"
