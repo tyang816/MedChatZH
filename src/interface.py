@@ -143,8 +143,8 @@ if __name__ == '__main__':
     
     print(f"Loading model {args.model_name_or_path}...")
     if args.model_name == 'baichuan':
-        tokenizer = BaiChuanTokenizer.from_pretrained(args.model_name_or_path)
-        model_config = BaiChuanConfig.from_pretrained(args.model_name_or_path)
+        tokenizer = AutoTokenizer.from_pretrained(args.model_name_or_path, trust_remote_code=True)
+        model_config = AutoConfig.from_pretrained(args.model_name_or_path, trust_remote_code=True)
         print("load model config successfully")
         model = AutoModelForCausalLM.from_pretrained(
             args.model_name_or_path, device_map="auto", torch_dtype=load_type, config=model_config, trust_remote_code=True
