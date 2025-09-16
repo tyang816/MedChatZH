@@ -9,10 +9,24 @@ dtype = torch.bfloat16 if torch.cuda.get_device_capability()[0] == 8 else torch.
 class EndpointHandler:
     def __init__(self, path=""):
         # load the model
-        tokenizer = AutoTokenizer.from_pretrained(path, trust_remote_code=True)
-        model = AutoModelForCausalLM.from_pretrained(path, device_map="auto", torch_dtype=dtype, trust_remote_code=True)
+        tokenizer = AutoTokenizer.from_pretrained(
+            path, 
+            trust_remote_code=True
+        )
+        model = AutoModelForCausalLM.from_pretrained(
+            path, 
+            device_map="auto", 
+            torch_dtype=dtype, 
+            trust_remote_code=True,
+            revision="main"
+        )
         # create inference pipeline
-        self.pipeline = pipeline("text-generation", model=model, tokenizer=tokenizer)
+        self.pipeline = pipeline(
+            "text-generation", 
+            model=model, 
+            tokenizer=tokenizer,
+            trust_remote_code=True
+        )
 
     def __call__(self, data: Any) -> List[List[Dict[str, float]]]:
         inputs = data.pop("inputs", data)
