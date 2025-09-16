@@ -1,5 +1,8 @@
 # MedChatZH
 
+<a href='https://hyper.ai/datasets/43610'><img src='https://img.shields.io/badge/Dataset-HyperAI-red'>   </a><a href='https://huggingface.co/datasets/tyang816/MedChatZH'><img src='https://img.shields.io/badge/Dataset-HuggingFace-yellow'></a>   <a href='https://huggingface.co/tyang816/MedChatZH'><img src='https://img.shields.io/badge/Model-HuggingFace-yellow'></a>
+
+
 ## MedChatZH中文微调参数
 
 基于Baichuan-7B在中医书籍数据和医疗指令对话数据上训练，使其具备较强的中文医疗对话能力，**能够理解中医问题**。
